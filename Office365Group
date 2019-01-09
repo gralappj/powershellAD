@@ -1,0 +1,8 @@
+$UserCredential = Get-Credential
+$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://outlook.office365.com/powershell-liveid/ -Credential $UserCredential -Authentication Basic -AllowRedirection
+Import-PSSession $Session
+New-UnifiedGroup -DisplayName "CMH-Williamsburg Clinic Nurses" -Alias CMH-WilliamsburgClinicNurses -AccessType Private
+Set-UnifiedGroup -identity CMH-WilliamsburgClinicNurses -primarysmtpaddress CMH-WilliamsburgClinicNurses@compassmemorial.org
+Set-UnifiedGroup "CMH-WilliamsburgClinicNurses" -UnifiedGroupWelcomeMessageEnabled:$false
+Add-UnifiedGroupLinks -Identity "CMH-WilliamsburgClinicNurses" -LinkType Members -Links claeyswj,quinladk,ameek,sjd
+Remove-PSSession $Session
