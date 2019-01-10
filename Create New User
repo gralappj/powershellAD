@@ -1,0 +1,181 @@
+#Version 2.0 - functionaly for O365
+
+#------------------------------------------------------------------------------------------------------------------
+$ErrorActionPreference = "Stop"
+$WarningPreference = "SilentlyContinue"
+Import-Module MSOnline
+Import-Module AzureAD
+
+#------------------------------------------------------------------------------------------------------------------
+function Show-Menu0
+{
+     param (
+           [string]$Title = 'Active Directory Administration Tool'
+		   )
+     ##cls
+	 ""
+     Write-Host "================ $Title ================"
+     ""
+     Write-Host "1) Create new user account and email address"
+     Write-Host "2) Disable user account"
+     Write-Host "3) Create new email distribution group"
+	 #Write-Host "4) Status of all AD user accounts"
+	 #Write-Host "5) Outlook Resource Customization"
+     Write-Host "Q) Press 'Q' to quit."
+}
+#------------------------------------------------------------------------------------------------------------------
+function Show-Menu1
+{
+     param (
+           [string]$Title = 'Office 365'
+     )
+     #cls
+     Write-Host "================ $Title ================"
+     
+     Write-Host "1: Press '1' Office E5 License."
+     Write-Host "2: Press '2' Office E3 and ATP License."
+     Write-Host "Q: Press 'Q' to quit."
+}
+#------------------------------------------------------------------------------------------------------------------
+function Show-Menu2
+{
+     param (
+           [string]$Title = 'Active Directory Groups'
+     )
+     cls
+     Write-Host "================ $Title ================"
+     
+     Write-Host "1: Press '1' Nursing"
+     Write-Host "2: Press '2' Laboratory"
+     Write-Host "3: Press '3' Radiology"
+	 Write-Host "4: Press '4' Surgery"
+	 Write-Host "5: Press '5' Therapy"
+	 Write-Host "6: Press '6' Clinic"
+	 Write-Host "7: Press '7' CNA"
+	 Write-Host "8: Press '8' Management Folder"
+	 Write-Host "9: Press '9' Secure Texting Desktop"
+     Write-Host "Q: Press 'x' to quit."
+}
+#------------------------------------------------------------------------------------------------------------------
+do
+{
+Show-Menu0
+$selection = Read-Host "Please make a selection"
+switch ($selection)
+ {
+     '1' {
+         $UserCredential = get-credential "$env:USERNAME$domain@compassmemorial.org"
+			#$UserCredential = get-credential "$env:USERNAME$domain"
+			Connect-MsolService -Credential $UserCredential
+			
+			Get-MsolAccountSku | out-host
+			pause
+			$fname = Read-Host 'Enter First Name'
+			$midinit = Read-Host 'Enter Middle Initial'
+			$lname = Read-Host 'Enter Last Name'	  
+			$department = Read-Host 'Enter Department Name'
+			$title = Read-Host 'Enter Posiiton Title'
+			$userID = Read-Host 'Enter User Name'
+				while (Get-ADUser -LDAPFilter "(sAMAccountName=$userID)")
+					{
+					   $userID = Read-Host 'Username in use, please enter new user name'
+					}
+			$office = Read-Host 'Enter Office Location'
+			$FolderPath=("\\MMH-FS1\users\"+$userID)
+			$officephone = Read-Host 'Enter Office Phone Number'
+			$fullname=($fname + " " + $midinit + ". " + $lname)
+			$upn=($userID+"@compassmemorial.org")
+			$homefolder=("\\mmh-fs1\users\"+$userID)
+			$profile=("\\mmhmaster\Profiles$\"+$userID)
+
+			$password = [System.Web.Security.Membership]::GeneratePassword(11,2);
+			$randomPassword = ConvertTo-SecureString -String $password -AsPlainText -Force
+			
+			New-ADUser -Name $fullname -Company "Compass Memorial Healthcare" -Department $department -Description $department -GivenName $fname -Initials $midinit -Surname $lname -DisplayName $fullname -Title $title -EmployeeID $userID -SamAccountName $userID -HomeDirectory $homefolder -HomeDrive "U:" -OfficePhone $officephone -office $office -Path "OU=NewAccounts,DC=MMH,DC=Local" -ProfilePath $profile -ScriptPath "MMHLogon.bat" -UserPrincipalName $upn -AccountPassword $randomPassword -Enabled 1
+			write-output "User Account has been created."
+			
+			Add-ADGroupMember MMH_Imprivata_Everyone $userID
+			Add-ADGroupMember MMH_UCS_Clinical $userID
+			Add-ADGroupMember User_Drives $userID
+			write-output "Default User Groups have been added."
+			
+			New-Item \\MMH-FS1\users\$userID -type directory
+			write-output "User folder created."
+
+			Start-Sleep -s 5
+
+			$Acl = Get-Acl $FolderPath
+				$rule = New-Object System.Security.AccessControl.FileSystemAccessRule("$userID", "FullControl", "ContainerInherit, ObjectInherit", "None", "Allow")
+				$Acl.AddAccessRule($rule)
+				Set-Acl $FolderPath $Acl | Out-Null
+			write-output "Permissions assigned to user folder."
+
+			Set-ADAccountPassword -Identity $userID -NewPassword (ConvertTo-SecureString -AsPlainText "Compass2017" -Force)
+#------------------------------------------------------------------------------------------------------------------
+			$title = "Email Account"
+			$message = "Do you need to create an email account?"
+			$yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes", ` "Create Remote Email Account."
+			$no = New-Object System.Management.Automation.Host.ChoiceDescription "&No", ` "Do not create an email account."
+			$options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
+			$result = $host.ui.PromptForChoice($title, $message, $options, 0)
+			switch ($result)
+			{
+				0 { 
+					$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri http://mmh-exchange13.mmh.local/PowerShell/ -Authentication Kerberos
+					Import-PSSession $Session
+					enable-remotemailbox -identity $userID -RemoteRoutingAddress $userID@server03.mail.onmicrosoft.com
+					Start-Sleep -s 5
+					Remove-PSSession $Session
+					write-output "Email Account has been created."
+					Set-ADUser $userID -Replace @{msExchRemoteRecipientType="4"}
+				  }
+				1 {"No mailbox will be created."}
+			}
+#------------------------------------------------------------------------------------------------------------------			
+			$title = "Office 365"
+			$message = "Do you need  an Microsoft 365 License?"
+			$yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes", ` "Add office365."
+			$no = New-Object System.Management.Automation.Host.ChoiceDescription "&No", ` "Do not add office 365."
+			$options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
+			$result = $host.ui.PromptForChoice($title, $message, $options, 0)
+			switch ($result)
+			{
+				0 { 
+					$Session1 = New-PSSession -ComputerName mmh-exchange13 
+					import-module -Name adsync -PSSession $Session1
+					get-module
+					#import-module -Name ADsync #"C:\Program Files\Microsoft Azure AD Sync\Bin\ADSync\adsync.psm"	#throws an error right here, unable to no valid module was found
+					write-output "ADSync module loaded"
+					Get-ADSyncScheduler
+					pause
+					Start-ADSyncSyncCycle -PolicyType Delta
+					Start-Sleep -s 10
+					Remove-Module adsync
+					$UserCredential = get-credential "$env:USERNAME$domain@compassmemorial.org"
+					#$UserCredential = get-credential "$env:USERNAME$domain"
+					Connect-MsolService -Credential $UserCredential
+					Get-MSOLUser -UserPrincipalName $upn | Set-MsolUser -UsageLocation US
+					write-output "Location set to United States"
+					Start-Sleep -s 5
+					Get-MSOLUser -UserPrincipalName $upn | Set-MsolUserLicense -AddLicenses "server03:ENTERPRISEPACK","server03:FLOW_FREE","server03:ATP_ENTERPRISE"
+					write-output "office enterprise, flow free and atp licenses added to user account"
+					#Set-MsolUserLicense -SignInName $upn â€“AddLicenses "ENTERPRISEPACK","server03:ATP_ENTERPRISE"
+					#Get-MSOLUser -UserPrincipalName $upn | Select-Object -Property SignInName | Set-MsolUserLicense â€“AddLicenses "ENTERPRISEPACK","server03:ATP_ENTERPRISE"
+				  }
+				1 {"No Office account license will be assigned."}
+			}
+#------------------------------------------------------------------------------------------------------------------		
+     } '2' {
+		cls
+         'You chose option #2'
+		 write-host 'You chose option #2'
+     } '3' {
+         'You chose option #3'
+     } 'q' {
+         return
+     }
+ }
+ }
+ until ($input -eq 'q')
+ #------------------------------------------------------------------------------------------------------------------
+ 
