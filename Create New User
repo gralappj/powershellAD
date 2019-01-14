@@ -5,6 +5,8 @@ $ErrorActionPreference = "Stop"
 $WarningPreference = "SilentlyContinue"
 Import-Module MSOnline
 Import-Module AzureAD
+#Load "System.Web" assembly in PowerShell console 
+[Reflection.Assembly]::LoadWithPartialName("System.Web")
 
 #------------------------------------------------------------------------------------------------------------------
 function Show-Menu0
@@ -18,7 +20,7 @@ function Show-Menu0
      ""
      Write-Host "1) Create new user account and email address"
      Write-Host "2) Disable user account"
-     Write-Host "3) Create new email distribution group"
+     Write-Host "3) Add to distribution group(s)"
 	 #Write-Host "4) Status of all AD user accounts"
 	 #Write-Host "5) Outlook Resource Customization"
      Write-Host "Q) Press 'Q' to quit."
@@ -72,7 +74,7 @@ switch ($selection)
 			pause
 			$fname = Read-Host 'Enter First Name'
 			$midinit = Read-Host 'Enter Middle Initial'
-			$lname = Read-Host 'Enter Last Name'	  
+			$lname = Read-Host 'Enter Last Name'
 			$department = Read-Host 'Enter Department Name'
 			$title = Read-Host 'Enter Posiiton Title'
 			$userID = Read-Host 'Enter User Name'
@@ -140,16 +142,15 @@ switch ($selection)
 			$result = $host.ui.PromptForChoice($title, $message, $options, 0)
 			switch ($result)
 			{
-				0 { 
+				0 {
 					$Session1 = New-PSSession -ComputerName mmh-exchange13 
 					import-module -Name adsync -PSSession $Session1
 					get-module
-					#import-module -Name ADsync #"C:\Program Files\Microsoft Azure AD Sync\Bin\ADSync\adsync.psm"	#throws an error right here, unable to no valid module was found
-					write-output "ADSync module loaded"
+					#write-output "ADSync module loaded"
 					Get-ADSyncScheduler
 					pause
 					Start-ADSyncSyncCycle -PolicyType Delta
-					Start-Sleep -s 10
+					Start-Sleep -s 30
 					Remove-Module adsync
 					$UserCredential = get-credential "$env:USERNAME$domain@compassmemorial.org"
 					#$UserCredential = get-credential "$env:USERNAME$domain"
@@ -159,18 +160,71 @@ switch ($selection)
 					Start-Sleep -s 5
 					Get-MSOLUser -UserPrincipalName $upn | Set-MsolUserLicense -AddLicenses "server03:ENTERPRISEPACK","server03:FLOW_FREE","server03:ATP_ENTERPRISE"
 					write-output "office enterprise, flow free and atp licenses added to user account"
-					#Set-MsolUserLicense -SignInName $upn â€“AddLicenses "ENTERPRISEPACK","server03:ATP_ENTERPRISE"
-					#Get-MSOLUser -UserPrincipalName $upn | Select-Object -Property SignInName | Set-MsolUserLicense â€“AddLicenses "ENTERPRISEPACK","server03:ATP_ENTERPRISE"
+					#Set-MsolUserLicense -SignInName $upn AddLicenses "ENTERPRISEPACK","server03:ATP_ENTERPRISE"
+					#Get-MSOLUser -UserPrincipalName $upn | Select-Object -Property SignInName | Set-MsolUserLicense AddLicenses "ENTERPRISEPACK","server03:ATP_ENTERPRISE"
 				  }
-				1 {"No Office account license will be assigned."}
+				1 {"No Office license will be assigned to the account."}
 			}
 #------------------------------------------------------------------------------------------------------------------		
      } '2' {
-		cls
-         'You chose option #2'
-		 write-host 'You chose option #2'
+			$users = read-host "Userid of person to disable"
+			$ADgroups = Get-ADPrincipalGroupMembership -Identity $users | where {$_.Name -ne "Domain Users"}
+			Remove-ADPrincipalGroupMembership -Identity $users -MemberOf $ADgroups -Confirm:$false
+
+			Disable-ADAccount -Identity $users
+			
+			#$UserCredential = Get-Credential
+			#Connect-MsolService -Credential $UserCredential
+			#Set-MsolUserLicense -UserPrincipalName ($userID+"@compassmemorial.org") -RemoveLicenses "server03:ENTERPRISEPACK"
+			#Set-MsolUserLicense -UserPrincipalName ($userID+"@compassmemorial.org") -RemoveLicenses "server03:ENTERPRISEPREMIUM"
+			#Set-MsolUserLicense -UserPrincipalName ($userID+"@compassmemorial.org") -RemoveLicenses "server03:ATP_ENTERPRISE"
+			#Set-MsolUser -UserPrincipalName ($userID+"@compassmemorial.org")  -BlockCredential $true
+
+			$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri http://mmh-exchange13.mmh.local/PowerShell/ -Authentication Kerberos
+			Import-PSSession $Session
+
+			Set-Mailbox -HiddenFromAddressListsEnabled $true -Identity $users
+			#Disable-Mailbox $users
+			Remove-PSSession $Session
+
+			Get-ADUser -identity $users | Move-ADObject -TargetPath 'OU=Users,OU=X-Deactivated,dc=mmh,dc=local'
+			write-host "User account disabled, groups removed and email address hidden"
+#------------------------------------------------------------------------------------------------------------------	
      } '3' {
-         'You chose option #3'
+do
+{
+     Show-Menu2
+     $input = Read-Host "Please make a selection"
+     switch ($input)
+     {
+           '1' {
+                cls
+				Add-ADGroupMember Nursing $userID
+				Add-ADGroupMember 'Nursing Dept Nurses' $userID
+				Add-UnifiedGroupLinks -Identity "CMH-Nursing" -LinkType Members -Links $userID
+                'Nursing Groups were added'
+           } '2' {
+                cls
+				Add-ADGroupMember Lab $userID
+				Remove-ADGroupMember MMH_UCS_Clinical $userID
+				Add-ADGroupMember MMH_UCS_Laboratory $userID
+				Add-ADGroupMember MMH_Laboratory $userID
+				Add-UnifiedGroupLinks -Identity "CMH-Laboratory" -LinkType Members -Links $userID
+                'Laboratory Groups were added'
+           } '3' {
+                cls
+				Add-ADGroupMember Radiology $userID
+				Add-ADGroupMember 'Radiology Group' $userID
+				Add-UnifiedGroupLinks -Identity "CMH-Radiology" -LinkType Members -Links $userID
+                'Radiology Groups were added'
+           } #'q' {
+              #  return
+           #}
+     }
+     #pause
+	 cls
+}
+until ($input -eq 'x')
      } 'q' {
          return
      }
@@ -178,4 +232,17 @@ switch ($selection)
  }
  until ($input -eq 'q')
  #------------------------------------------------------------------------------------------------------------------
- 
+ #			$UserCredential = get-credential "$env:USERNAME$domain@compassmemorial.org"
+#			#$UserCredential = get-credential "$env:USERNAME$domain"
+#			Connect-MsolService -Credential $UserCredential
+			
+#			$GroupName = read-host "Enter group name to that will display in the GAL."
+#			$GroupName2 = read-host "enter group name with no spaces."
+#			
+#			$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://outlook.office365.com/powershell-liveid/ -Credential $UserCredential -Authentication Basic -AllowRedirection
+#			Import-PSSession $Session
+#			New-UnifiedGroup -DisplayName $GroupName -Alias $GroupName2 -AccessType Private
+#			Set-UnifiedGroup -identity $GroupName2 -primarysmtpaddress $GroupName2+"@compassmemorial.org"
+#			Set-UnifiedGroup $GroupName2 -UnifiedGroupWelcomeMessageEnabled:$false
+			#Add-UnifiedGroupLinks -Identity "CMH-WilliamsburgClinicNurses" -LinkType Members -Links claeyswj,quinladk,ameek,sjd
+#			Remove-PSSession $Session
