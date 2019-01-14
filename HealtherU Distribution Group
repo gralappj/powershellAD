@@ -1,0 +1,9 @@
+$UserCredential = get-credential "$env:USERNAME$domain@compassmemorial.org"
+#Connect-MsolService -Credential $UserCredential
+$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://outlook.office365.com/powershell-liveid/ -Credential $UserCredential -Authentication Basic -AllowRedirection
+Import-PSSession $Session
+New-UnifiedGroup -DisplayName "CMH-HealthierU" -Alias CMH-HealthierU -AccessType Private
+Set-UnifiedGroup -identity CMH-HealthierU -primarysmtpaddress "CMH-HealthierU@compassmemorial.org"
+Set-UnifiedGroup CMH-HealthierU -UnifiedGroupWelcomeMessageEnabled:$false
+Add-UnifiedGroupLinks -Identity "CMH-HealthierU" -LinkType Members -Links jwardenburg,douglaja,krakowbc,dloffer,millerjx1,kupkaha,koehnaj,NeversLM,werlinbl,jbreja,mgehring,hreif,gehrintl,schanbjk,hcarlson,msiebrecht,GrimmSA1,dkupka,robertam3,var,dfry,abokingkito,mam,DailyJD,deweeska,couchla,pxw,djohnson,lkc,quinladk,fortkj,leitcham1,hackersl,carneyhc,mmurphy,jas,sbaumgartner,cwelsh,BruessKA1,driscodl,josborn,athede,mobrien,pal,jag,kfults,riosmt,jfrimml,bockhakm1,nme,lme,kruselk,streetks,seckhardt,alb,ceinman,waddeler,kag,taylorbj2,bmr,quinlaja,cooverjl2,estradlb,pmews,ekr,ameek,inmancj,ckarsten,tls,nsh,hoeykj,mstaman
+Remove-PSSession $Session
